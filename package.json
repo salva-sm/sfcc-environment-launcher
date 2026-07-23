@@ -1,0 +1,24 @@
+{
+  "name": "sfcc-environment-launcher",
+  "version": "1.0.0",
+  "description": "Automated launcher script for SFCC On-Demand Sandboxes and local workspace setup.",
+  "main": "start_environment.sh",
+  "scripts": {
+    "start": "bash ./start_environment.sh",
+    "sfcc:auth": "sfcc-ci client:auth",
+    "task:install": "powershell -ExecutionPolicy Bypass -File ./install.ps1",
+    "task:remove": "powershell -ExecutionPolicy Bypass -Command \"Unregister-ScheduledTask -TaskName 'SFCC_Sandbox_Launcher' -Confirm:$false\""
+  },
+  "keywords": [
+    "sfcc",
+    "salesforce",
+    "commerce-cloud",
+    "sandbox",
+    "automation"
+  ],
+  "author": "salva-sm",
+  "license": "MIT",
+  "devDependencies": {
+    "@salesforce/sfcc-ci": "^2.11.0"
+  }
+}
