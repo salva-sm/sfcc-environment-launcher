@@ -1,6 +1,6 @@
 {
   "name": "sfcc-environment-launcher",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Automated launcher script for SFCC On-Demand Sandboxes and local workspace setup.",
   "main": "start_environment.sh",
   "scripts": {
