@@ -3,6 +3,8 @@ node_modules/
 
 # Environment & Credentials
 .env
+.env.*
+!.env.example
 *.env.local
 
 # IDE & Editor files
