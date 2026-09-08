@@ -4,32 +4,38 @@
 # SFCC Sandbox Launcher Script
 # ==============================================================================
 
-# 1. Load local configuration from .env if available
-if [ -f .env ]; then
-  export $(grep -v '^#' .env | xargs)
-else
-  echo "❌ ERROR: .env file not found."
-  exit 1
-fi
+# 1. Load configuration: .env first (resolved relative to this script, not the CWD),
+#    then the project's dw.json for whatever is still missing.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/load_config.sh"
 
-# 2. Validate required configuration from .env
-if [ -z "$REALM" ] || [ -z "$INSTANCE" ]; then
-    echo "❌ ERROR: REALM or INSTANCE is missing in .env"
+load_env_file || exit 1
+resolve_sfcc_config
+
+# 2. Validate the resulting configuration
+if [ -z "$SFCC_REALM" ] || [ -z "$SFCC_INSTANCE" ]; then
+    echo "❌ ERROR: SFCC_REALM/SFCC_INSTANCE are missing in $ENV_FILE and could not be read from dw.json"
     exit 1
 fi
 
-SANDBOX_ID="${REALM}-${INSTANCE}"
-SANDBOX_URL="https://${REALM}-${INSTANCE}.dx.commercecloud.salesforce.com/on/demandware.store/Sites-Site/default/ViewApplication-DisplayWelcomePage"
+SANDBOX_ID="${SFCC_REALM}-${SFCC_INSTANCE}"
+SANDBOX_URL="https://${SANDBOX_ID}.dx.commercecloud.salesforce.com/on/demandware.store/Sites-Site/default/ViewApplication-DisplayWelcomePage"
 
 POLL_INTERVAL=${POLL_INTERVAL:-15}
 MAX_TIMEOUT=${MAX_TIMEOUT:-900} # 15 minutes default timeout
 
-# Function to perform interactive login
+# Interactive login: the user always authenticates through the browser, so no client secret is needed
 do_login() {
     echo "⚠️ Session expired or unauthorized for WebDAV."
+
     if [ -z "$SFCC_OAUTH_CLIENT_ID" ]; then
+        if [ ! -t 0 ]; then
+            echo "❌ ERROR: SFCC_OAUTH_CLIENT_ID is missing in $ENV_FILE and in dw.json, and no terminal is available to ask for it."
+            exit 1
+        fi
         read -p "🔑 Enter your SFCC_OAUTH_CLIENT_ID: " SFCC_OAUTH_CLIENT_ID
     fi
+
     echo "🌐 Initiating login via browser..."
     npx sfcc-ci auth:login "$SFCC_OAUTH_CLIENT_ID"
 }
@@ -52,35 +58,35 @@ fi
 echo "🚀 Requesting start for Sandbox: $SANDBOX_ID..."
 npx sfcc-ci sandbox:start -s "$SANDBOX_ID"
 
-# 5. Launch VS Code
-if [ -n "$PROJECT_PATH" ]; then
-    echo "💻 Opening VS Code at: $PROJECT_PATH"
-    code "$PROJECT_PATH"
-else
-    echo "ℹ️ PROJECT_PATH not set in .env, skipping VS Code auto-launch."
-fi
+# 5. Launch the configured editor (LAUNCH_EDITOR: .env, else the dotfiles' choice)
+open_project
 
 # 6. Poll Sandbox Status with Timeout
 echo "⏳ Monitoring sandbox readiness (Timeout: ${MAX_TIMEOUT}s)..."
 ELAPSED=0
 
 while [ $ELAPSED -lt $MAX_TIMEOUT ]; do
-    RAW_LINE=$(npx sfcc-ci sandbox:list | grep -E "$REALM" | grep -E "$INSTANCE")
-    STATUS=$(npx sfcc-ci sandbox:list | grep -E "$REALM" | grep -E "$INSTANCE" | awk -F '│' '{print $5}' | xargs)
+    STATUS=$(npx sfcc-ci sandbox:list | grep -E "$SFCC_REALM" | grep -E "$SFCC_INSTANCE" \
+        | awk -F '│' '{print $5}' | xargs | tr '[:upper:]' '[:lower:]')
 
     [ -z "$STATUS" ] && STATUS="unknown"
     echo "   [$(date +'%H:%M:%S')] Status: '$STATUS' (${ELAPSED}s / ${MAX_TIMEOUT}s)"
 
-    if [ "$STATUS" == "started" ]; then
-        echo -e "\n✅ SUCCESS: Sandbox $SANDBOX_ID is running!"
-        echo "🌐 Opening Business Manager in browser..."
-        start "$SANDBOX_URL"
-        exit 0
-    elif [ "$STATUS" != "stopped" ] && [ "$STATUS" != "unknown" ]; then
-        echo -e "\n⚠️ WARNING: Unexpected sandbox status encountered: '$STATUS'."
-        exit 1
-    fi
+    case "$STATUS" in
+        started)
+            echo -e "\n✅ SUCCESS: Sandbox $SANDBOX_ID is running!"
+            echo "🌐 Opening Business Manager in browser..."
+            start "$SANDBOX_URL"
+            exit 0
+            ;;
+        failed|deleting|deleted)
+            echo -e "\n❌ ERROR: Sandbox reached an unrecoverable state: '$STATUS'."
+            exit 1
+            ;;
+    esac
 
+    # Any other state (starting, pending, creating, stopping, stopped, unknown)
+    # is transient while the sandbox boots, so keep polling.
     sleep $POLL_INTERVAL
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
 done

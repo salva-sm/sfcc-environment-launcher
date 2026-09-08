@@ -49,12 +49,40 @@ Ensure the following tools are installed on your machine:
    ```
 
 3. **Configure Environment Variables:**
-   Create a `.env` file in the root folder using your SFCC API credentials:
+   Create a `.env` file in the root folder (see `.env.example`). Only the project path
+   is really required:
    ```env
-   SFCC_REALM=your_realm
-   SFCC_INSTANCE=your_instance_number
    LOCAL_PROJECT_PATH=C:/Users/your-user/Github/your-repo
    ```
+
+   `SFCC_REALM`, `SFCC_INSTANCE` and `SFCC_OAUTH_CLIENT_ID` are optional: when they are
+   empty, the scripts read them from the project's `dw.json` — `hostname`
+   (`<realm>-<instance>.dx.commercecloud.salesforce.com`) gives the realm and the
+   instance, `client-id` gives the API client. `dw.json` is looked up at the project root
+   and one level below it (e.g. `source/dw.json`); if `LOCAL_PROJECT_PATH` points to a
+   `*.code-workspace` file, every folder declared in it is searched. Set `DW_JSON_PATH`
+   to point somewhere else. Values present in `.env` always win.
+
+   No client secret is used: authentication always happens interactively in the browser
+   (`sfcc-ci auth:login`).
+
+4. **Optional: reuse your dotfiles as the source of truth**
+   If you use the [dotfiles](https://github.com/salva-sm/dotfiles) repo, `LOCAL_PROJECT_PATH`
+   and `LAUNCH_EDITOR` can be left empty and both are resolved from there:
+
+   | `.env` | Taken from the dotfiles |
+   | :--- | :--- |
+   | `LOCAL_PROJECT_PATH` | the generated `vscode/workspaces/sfcc.code-workspace`, or `SFCC_PROJECT_DIR` in `git-bash/env.local` (relative to `vscode/workspaces/`) |
+   | `LAUNCH_EDITOR` | `DOTFILES_EDITOR` in `git-bash/env.local` (`code` or `zed`) |
+
+   The checkout is expected at `$HOME/Github/dotfiles`; set `DOTFILES_DIR` in `.env`
+   for a different location. `.env` always wins when the value is present.
+
+5. **Editor**
+   `LAUNCH_EDITOR` accepts `code` or `zed` and defaults to VS Code. Because Zed can't
+   open `*.code-workspace` files, it receives the folders declared inside the workspace
+   instead. When you install the Windows task (below) without dotfiles present,
+   `install.ps1` asks which editor to use and writes it to `.env`.
 
 ---
 
